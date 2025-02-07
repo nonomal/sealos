@@ -15,43 +15,36 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
-	"github.com/labring/sealos/pkg/token"
-
-	"github.com/labring/sealos/pkg/utils/logger"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/util/json"
+
+	runtimeutils "github.com/labring/sealos/pkg/runtime/utils"
+	"github.com/labring/sealos/pkg/utils/logger"
 )
 
-func NewTokenCmd() *cobra.Command {
-	var cmd = &cobra.Command{
+func newTokenCmd() *cobra.Command {
+	var tokenCmd = &cobra.Command{
 		Use:   "token",
 		Short: "token generator",
 		Run: func(cmd *cobra.Command, args []string) {
-			t, err := token.Default()
+			var config, certificateKey string
+			if len(args) > 0 {
+				config = args[0]
+			}
+			if len(args) > 1 {
+				certificateKey = args[1]
+			}
+			t, err := runtimeutils.GenerateToken(config, certificateKey)
 			if err != nil {
 				logger.Error("exec token error: " + err.Error())
 				os.Exit(1)
 			}
 			data, _ := json.Marshal(t)
-			println(string(data))
+			fmt.Println(string(data))
 		},
 	}
-
-	return cmd
-}
-
-func init() {
-	rootCmd.AddCommand(NewTokenCmd())
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// hostnameCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// hostnameCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	return tokenCmd
 }

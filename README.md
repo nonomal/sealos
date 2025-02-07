@@ -1,157 +1,145 @@
-<a href="https://trackgit.com">
-  <img src="https://us-central1-trackgit-analytics.cloudfunctions.net/token/ping/kexrkhvqjlzkdiap4zke" alt="trackgit-views" />
-</a>
+<h2 align="center">
+  
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./docs/4.0/img/sealos-left-dark.png" />
+    <source media="(prefers-color-scheme: light)" srcset="./docs/4.0/img/sealos-left.png" />
+    <img src="./docs/4.0/img/sealos-left.png" />
+  </picture>
+  
+A Cloud Operating System designed for managing cloud-native applications
 
-![](https://socialify.git.ci/labring/sealos/image?description=1&descriptionEditable=Cloud%20OS%20distribution%20with%20Kubernetes%20as%20kernel.%20Practise%20cloud%20native%20like%20using%20macOS!&font=Source%20Code%20Pro&forks=1&language=1&pattern=Charlie%20Brown&stargazers=1&theme=Light)
+</h2>
 
 <div align="center">
-  <p>
-    <b>Popularize cloud native technologies with ease</b>
-  </p>
-  <p>
-
-[![Awesome](https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg)](https://github.com/labring/sealos)
-[![Build Status](https://github.com/labring/sealos/actions/workflows/release.yml/badge.svg)](https://github.com/labring/sealos/actions)
-[![Website](https://img.shields.io/website?url=https%3A%2F%2Fpostwoman.io&logo=Postwoman)](https://sealyun.com)
-[![OSCS Status](https://www.oscs1024.com/platform/badge/labring/sealos.svg?size=small)](https://www.oscs1024.com/project/labring/sealos?ref=badge_small)
-[![Chat on Telegram](https://img.shields.io/badge/chat-Telegram-blueviolet?logo=Telegram)](https://t.me/cloudnativer)
-
-  </p>
+<a
+    href="https://runacap.com/ross-index/annual-2023/"
+    target="_blank"
+    rel="noopener"
+>
+    <img
+        style="width: 260px; height: 56px"
+        src="https://runacap.com/wp-content/uploads/2024/03/Annual_ROSS_badge_black_2023.svg"
+        alt="ROSS Index - Fastest Growing Open-Source Startups | Runa Capital"
+        width="260"
+        height="56"
+    />
+</a>
 </div>
 
----
+<div align="center">
 
-> English | [中文](docs/4.0/README.md)
+[![Open in Dev Container](https://img.shields.io/static/v1?label=Dev%20Container&message=Open&color=blue&logo=visualstudiocode)](https://vscode.dev/github/labring/sealos)
+[![Build Status](https://github.com/labring/sealos/actions/workflows/release.yml/badge.svg)](https://github.com/labring/sealos/actions)
+[![](https://img.shields.io/docker/pulls/labring/kubernetes)](https://hub.docker.com/r/labring/kubernetes)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Flabring%2Fsealos.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Flabring%2Fsealos?ref=badge_shield)
+[![codecov](https://codecov.io/gh/labring/sealos/branch/main/graph/badge.svg?token=e41ZDcj06N)](https://codecov.io/gh/labring/sealos)
+[![Website](https://img.shields.io/website?url=https%3A%2F%2Fpostwoman.io&logo=Postwoman)](https://sealos.io)
+[![OSCS Status](https://www.oscs1024.com/platform/badge/labring/sealos.svg?size=small)](https://www.oscs1024.com/repo/labring/sealos?ref=badge_small)
 
-**Documentation: _[Website](https://www.sealyun.com), [Blog](https://icloudnative.io)_**
+<br />
 
-**Join us: [DingTalk](https://qr.dingtalk.com/action/joingroup?code=v1,k1,1QW+Q/+iuEirIbgKFztrUNGrVBXAuKfltwpW1WlOTOo=&_dt_no_comment=1&origin=11), [Telegram](https://t.me/cloudnativer), QQ Group(98488045), Wechat：fangnux**
+[![discord](https://theme.zdassets.com/theme_assets/678183/cc59daa07820943e943c2fc283b9079d7003ff76.svg)](https://discord.gg/qzBmGGZGk7)
 
-## What is sealos
+</div>
 
-**sealos is a cloud operating system distribution with Kubernetes as its kernel.**
+https://github.com/user-attachments/assets/a7b7ed5c-0e31-4158-8a76-3b161ed70a70
 
-In the early stages, operatings systems have adopted a layered architecture, which later evolved into kernel architecture like Linux and Windows. With the emergence of container technologies, cloud OS will migrate to a "cloud kernel" architecture with strong cohesion in the future.
+<p align="center">
+  <a href="https://sealos.io/docs/Intro">Docs</a> |
+  <a href="./README_zh.md">简体中文</a> | 
+  <a href="https://github.com/orgs/labring/projects/4/views/9">Roadmap</a>
+</p>
 
-![](https://user-images.githubusercontent.com/8912557/173866494-379ba0dd-05af-4095-b63d-08f594581c52.png)
+Sealos['siːləs] is a cloud operating system distribution based on the Kubernetes kernel. Using the cloud like using a personal computer, reducing the cost of the cloud to 1/10 of the original.
 
-- From now on, think of all your machines as an abstract supercomputer whose operating system is sealos, where Kubernetes serves as the OS kernel.
-- Instead of IaaS, PaaS and SaaS, there will only be cloud OS drivers(CSI, CNI and CRI implementations), cloud OS kernel(Kubernetes) and distributed applications.
+<img width="916" alt="image" src="https://github.com/labring/sealos/assets/8912557/9e8c1d76-718e-4910-a9ab-94f220a61a9c">
 
-> Core Capabilities
+## Create any development environment in sealos with one click
 
-- Cluster image - The entire cluster will be able to build, ship and run. Semantics of docker will be extended to clusters so that any distributed applications can be defined and run smoothly.
-- hub.sealos - A cluster image repository where you can retrieve pre-built distributed applications such as basic Kubernetes cluster image, high availability pgsql cluster image, high availability minio cluster image, etc.
-- desktop.sealos - A desktop for cloud OS, not to be confused with traditional cloud desktop. It is similar to macOS, but manages cluster and distributed applications instead of personal computers.
-- Distributed application matrix - Anything you need including storage / network / HA database / message queue / monitoring can be retrieved with a click of the mouse, or simply `sealos run`.
+1. [Login in](https://cloud.sealos.run) , open sealos Devbox.
+   
+   <img width="656" alt="image" src="https://github.com/user-attachments/assets/79692f6c-315f-4363-9426-b41f541f9a55">
+   
+2. Create a development env, any language, any framework.
+   
+   <img width="1147" alt="image" src="https://github.com/user-attachments/assets/6075bbb0-4765-4786-9154-3adaa139900c">
+   
+3. Use vscode or cursor access to the Env.
+   
+   <img width="864" alt="image" src="https://github.com/user-attachments/assets/e5f9dcdc-5149-4e43-aa13-6c17507fbe9f">
+   
+   <img width="1024" alt="image" src="https://github.com/user-attachments/assets/9a985280-6ff2-48dc-83b9-9abd8f93af17">
 
-## Vision of sealos
+## Create any database on sealos
 
-- Any organization can use the cloud OS based on Kubernetes as easily as using macOS
-- Anyone can build complex cloud services with a click of the mouse or a single command
-- Any organization can maintain the entire cloud system with an intern
-- Any organization can have a more open AWS, and public cloud and private cloud can provide the same experience
-- Any distributed software can run in the system with a single click and self-operate.
+1. [Login in](https://cloud.sealos.run) , open sealos database.
+   
+   <img width="567" alt="image" src="https://github.com/user-attachments/assets/74ca3ce9-6ef8-4396-b9c2-7c1940bb7e0c">
 
-## What can sealos do
+2. Create Database.
 
-- Manage clusters lifecycle, quickly install HA Kubernetes clusters, add / remove nodes, clean the cluster, auto recovering, etc.
-- Download and use OCI-compatible distributed software like openebs, minio, ingress, pgsql, mysql, redis, etc. from sealos hub.
-- Manage an entire cluster and the distributed applications running on it just like using macOS with sealos desktop.
-- sealos can manage Kubernetes, but is not only a Kubernetes manager. It is an abstract cloud OS that can manage Kubernetes through downloading an managing application.
-- sealos can install Kubernetes, but is not only a Kubernetes installer. Installing Kubernetes is only a basic capability of sealos.
+   <img width="874" alt="image" src="https://github.com/user-attachments/assets/4cc88a54-70e6-458f-9766-4578774e7f81">
 
-## Who should use sealos
+3. Access your database.
 
-- Beginners - Even beginners that know nothing about Kubernetes can use sealos painlessly through command line or GUI to obtain the software needed, like establishing a HA database with a single mouse click.
-- SaaS application developer - Use a single command to retrieve the service you need, like a database, an HA message queue or a developing environment, without any knowledge of low-level details.
-- Cluster manager - sealos marketplace offers a wide range of managing applications like lens official dashboard, web terminal, and cloud native monitoring systems.
-- Cloud OS developer - You may develop sealos applications and submit them to sealos hub for others to use.
-- Private cloud delivery operator - sealos cluster image ensures high consistency in offline environment and great encapsulation for SaaS applications, significantly easing the private cloud delivery process.
-- Organizations - You may use sealos public cloud directly, or start an identical private cloud in your own data center. You can even run sealos on the IaaS of public cloud vendor and no longer suffer from vendor lock-in.
+   <img width="1430" alt="image" src="https://github.com/user-attachments/assets/bcf54218-f4f4-4c89-a107-0bbde6f92d67">
 
-## Why is sealos different
+## Deploy any docker image on sealos
 
-> Kubernetes is a means, not an end
+1. [Login in](https://cloud.sealos.run) , open sealos App launchpad.
 
-For general users, the most important thing is what's running on Kubernetes, rather than Kubernetes itself. With sealos, users do not need to care about Kubernetes.
+  <img width="567" alt="image" src="https://github.com/user-attachments/assets/5f6481c0-05c6-4892-a096-94b613cee73c">
 
-Meanwhile, for those who are familiar with Kubernetes, sealos also provides smooth experience.
+2. Deploy a docker image, ingress, deployment...
 
-> Different forms for different applications
+   <img width="971" alt="image" src="https://github.com/user-attachments/assets/a291571f-d9fe-42e5-812e-3d8f274a97ca">
 
-The simplest version of sealos barely contains anything beyond capabilities related to cluster image. It only has a Kubernetes inside and other capabilities come from the applications installed, which makes sealos simple and powerful both for personal use and for serving public cloud under large-scale multi-tenant scenarios.
+3. Access your service.
 
-> Compatibility
+   <img width="1016" alt="image" src="https://github.com/user-attachments/assets/a54884cf-a1e8-4178-88af-655234ec7eef">
 
-Any preferences can be fulfilled on sealos. Take CI/CD as an example, some may like drone while others prefer argo, and they just need to install different applications. No CI/CD tools will be deeply integrated with sealos and users choose to install/uninstall them freely.
+## Install
 
-sealos will not pursue styles consistency of distributed applications, just like styles of Office and email client won't be the same. Otherwise, great effort need to be put into making them consistent and replacing an application will be very costly.
+* Install Sealos cloud: [Self hosting](https://sealos.io/self-hosting)
+* Install Kubernetes and kubernetes lifecycle managemant: [One command install kubernetes HA cluster](https://sealos.io/docs/self-hosting/lifecycle-management/quick-start/deploy-kubernetes#install-single-node-kubernetes)
 
-Also, sealos will not require the account information for different applications to be the same, as account management is usually specifically tuned to the application.
+## 💡 Core features
 
-> Different usage for different users
+- 🚀 **Application Management**: Easy management and quick release of publicly accessible distributed applications in the templates marketplace.
+- 🗄️ **Database Management**: Create high-availability databases in seconds, offering support for MySQL, PostgreSQL, MongoDB, and Redis.
+- 🌥️ **Cloud Universality**: Equally effective in both public and private cloud, enabling a seamless transition of traditional applications to the cloud.
 
-In macOS, general users use GUI, developers type in commands in the terminal, and system application developers call system APIs. Similarly, in sealos, general users use GUI, cloud native practitioners use kubectl and interact with dashboard and apiserver, and developers develop Kubernetes operator directly.
+## 🌟 Advantages
 
-> Simple and powerful
+- 💰 **Efficient & Economical**: Pay solely for the containers you utilize; automatic scaling prevents resource squandering and substantially reduces costs.
+- 🌐 **High Universality & Ease of Use**: Concentrate on your core business activities without worrying about system complexities; negligible learning costs involved.
+- 🛡️ **Agility & Security**: The distinctive multi-tenancy sharing model ensures both effective resource segmentation and collaboration, all under a secure framework.
 
-sealos provides the most basic framework and the capabilities all come from higher-level applications. The duty of sealos is to manage these applications, so the complexity of the system will not increase with more features.
 
-## sealos in practise
+## 🏘️ Community & support
 
-Boss: "We need to keep up with the pace and build a cloud platform based on Kubernetes, with support for storage, PaaS, CI/CD, cloud developing, database, ... What's the estimated cost?"
++ 🌐 Visit the [Sealos website](https://sealos.io/) for full documentation and useful links.
++ 💬 Join our [Discord server](https://discord.gg/qzBmGGZGk7) is to chat with Sealos developers and other Sealos users. This is a good place to learn about Sealos and Kubernetes, ask questions, and share your experiences.
++ 🐦 Tweet at @Sailos_io on [Twitter](https://twitter.com/Sailos_io) and follow us.
++ 🐞 Create [GitHub Issues](https://github.com/labring/sealos/issues/new/choose) for bug reports and feature requests.
 
-CTO: "3 for Kubernetes, 1 storage expert, 1 developer, 3 for PaaS, 3 for CI/CD, 5 for cloud developing, 3 for operation and maintenance... I think 15 people and half a year is sufficient."
+## 🚧 Roadmap
 
-Everyone is talking, and a voice comes from the corner:
+Sealos maintains a [public roadmap](https://github.com/orgs/labring/projects/4/views/9). It gives a high-level view of the main priorities for the project, the maturity of different features and projects, and how to influence the project direction.
 
-"I know an open-source software that can handle this with a single command:"
+## 👩‍💻 Contributing & Development
 
-```shell script
-$ sealos run labring/kubernetes:v1.24.0 labring/openebs:v1.9.0 labring/mysql:v8.0 labring/minio:v4.4.16 labring/ingress:v4.1.0 labring/laf:v0.8.0
-       -m 192.168.0.2 -n 192.168.0.3 -p 123456
-```
+Have a look through [existing Issues](https://github.com/labring/sealos/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc) and [Pull Requests](https://github.com/labring/sealos/pulls?q=is%3Apr+is%3Aopen+sort%3Aupdated-desc) that you could help with. If you'd like to request a feature or report a bug, please [create a GitHub Issue](https://github.com/labring/sealos/issues/new/choose) using one of the templates provided.
 
-And the task is completed before the meeting ends.
+📖 [See contribution guide →](./CONTRIBUTING.md)
 
-## Quickstart
-
-> Installing an HA kubernetes cluster with calico as CNI
-
-Here `kubernetes:v1.24.0` and `calico:v3.22.1` are the cluster images in the registry which are fully compatible with OCI standard. Wonder if we can use flannel instead? Of course!
-
-```shell script
-# Download and install sealos. sealos is a golang binary so you can just download and copy to bin. You may also download it from release page.
-$ wget -c https://sealyun-home.oss-cn-beijing.aliyuncs.com/sealos-4.0/latest/sealos-amd64 -O sealos && \
-    chmod +x sealos && mv sealos /usr/bin
-# Create a cluster
-$ sealos run labring/kubernetes:v1.24.0 labring/calico:v3.22.1 \
-     --masters 192.168.64.2,192.168.64.22,192.168.64.20 \
-     --nodes 192.168.64.21,192.168.64.19 -p [your-ssh-passwd]
-```
-
-> Building a custom cluster image
-
-See [Building an ingress cluster image](https://github.com/labring/sealos/blob/main/docs/4.0/build-example-ingress-helm.md).
-
-> Storage, message queue, database, etc.
-
-Don't be shocked by the following:
-
-```shell script
-$ sealos run labring/helm:v3.8.2 # install helm
-$ sealos run labring/openebs:v1.9.0 # install openebs
-$ sealos run labring/minio-operator:v4.4.16 labring/ingress-nginx:4.1.0 \
-   labring/mysql-operator:8.0.23-14.1 labring/redis-operator:3.1.4 # oneliner
-```
-
-And now everything is ready.
+🔧 [See development guide →](./DEVELOPGUIDE.md)
 
 ## Links
 
-- [Contribution Guidelines](./CONTRIBUTING.md)
-- [Development Guide](./DEVELOPGUIDE.md)
-- [sealos 3.0(older version)](https://github.com/labring/sealos/tree/release-v3.3.9#readme) For older version users. Note that sealos 4.0 includes significant improvements, so please upgrade ASAP.
-- [buildah](https://github.com/containers/buildah) Capabilities of buildah is widely used in sealos 4.0 to make cluster images compatible with container images and docker registry.
-- [sealer](https://github.com/sealerio/sealer) Capabilities of sealer is widely used in sealos 4.0 to make Clusterfile compatible with sealer, some module forked sealer source code.
+- [Laf](https://github.com/labring/laf) is a function as a service application on sealos.
+- [Buildah](https://github.com/containers/buildah) The functionalities of Buildah are extensively utilized in Sealos 4.0 to ensure that cluster images are compatible with OCI standard.
+
+<!-- ## License -->
+
+<!-- [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Flabring%2Fsealos.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Flabring%2Fsealos?ref=badge_large) -->

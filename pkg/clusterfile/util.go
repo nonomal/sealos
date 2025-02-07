@@ -16,23 +16,22 @@ package clusterfile
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
-
-	"github.com/labring/sealos/pkg/runtime"
-
-	v2 "github.com/labring/sealos/pkg/types/v1beta1"
-	"github.com/labring/sealos/pkg/utils/constants"
-	yaml2 "github.com/labring/sealos/pkg/utils/yaml"
 
 	k8sV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
+
+	"github.com/labring/sealos/pkg/constants"
+	"github.com/labring/sealos/pkg/runtime/decode"
+	v2 "github.com/labring/sealos/pkg/types/v1beta1"
+	yaml2 "github.com/labring/sealos/pkg/utils/yaml"
 )
 
 var ErrClusterNotExist = fmt.Errorf("no cluster exist")
 
 func GetDefaultClusterName() (string, error) {
-	files, err := ioutil.ReadDir(constants.Workdir())
+	files, err := os.ReadDir(constants.WorkDir())
 	if err != nil {
 		return "", err
 	}
@@ -45,7 +44,7 @@ func GetDefaultClusterName() (string, error) {
 	if len(clusters) == 1 {
 		return clusters[0], nil
 	} else if len(clusters) > 1 {
-		return "", fmt.Errorf("Select a cluster through the -c parameter: " + strings.Join(clusters, ","))
+		return "", fmt.Errorf("select a cluster through the -c parameter: " + strings.Join(clusters, ","))
 	}
 
 	return "", ErrClusterNotExist
@@ -63,21 +62,10 @@ func GetClusterFromName(clusterName string) (cluster *v2.Cluster, err error) {
 }
 func GetClusterFromFile(filepath string) (cluster *v2.Cluster, err error) {
 	cluster = &v2.Cluster{}
-	if err = yaml2.UnmarshalYamlFromFile(filepath, cluster); err != nil {
+	if err = yaml2.UnmarshalFile(filepath, cluster); err != nil {
 		return nil, fmt.Errorf("failed to get cluster from %s, %v", filepath, err)
 	}
 	return cluster, nil
-}
-
-func GetDefaultCluster() (cluster *v2.Cluster, err error) {
-	name, err := GetDefaultClusterName()
-	if err != nil {
-		return nil, err
-	}
-
-	var filepath = constants.Clusterfile(name)
-
-	return GetClusterFromFile(filepath)
 }
 
 func GetClusterFromDataCompatV1(data []byte) (*v2.Cluster, error) {
@@ -90,7 +78,7 @@ func GetClusterFromDataCompatV1(data []byte) (*v2.Cluster, error) {
 	if metaType.Kind != constants.Cluster {
 		return nil, fmt.Errorf("not found type cluster from: \n%s", data)
 	}
-	c, err := runtime.DecodeCRDFromString(string(data), constants.Cluster)
+	c, err := decode.CRDFromString(string(data), constants.Cluster)
 	if err != nil {
 		return nil, err
 	} else if c == nil {

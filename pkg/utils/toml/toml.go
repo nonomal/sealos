@@ -17,11 +17,12 @@ limitations under the License.
 package toml
 
 import (
-	fileutil "github.com/labring/sealos/pkg/utils/file"
 	"github.com/pelletier/go-toml"
+
+	fileutil "github.com/labring/sealos/pkg/utils/file"
 )
 
-func MarshalTomlToFile(file string, obj interface{}) error {
+func MarshalFile(file string, obj interface{}) error {
 	data, err := toml.Marshal(obj)
 	if err != nil {
 		return err
@@ -29,7 +30,7 @@ func MarshalTomlToFile(file string, obj interface{}) error {
 	return fileutil.WriteFile(file, data)
 }
 
-func UnmarshalTomlFromFile(file string, obj interface{}) error {
+func UnmarshalFile(file string, obj interface{}) error {
 	metadata, err := fileutil.ReadAll(file)
 	if err != nil {
 		return err

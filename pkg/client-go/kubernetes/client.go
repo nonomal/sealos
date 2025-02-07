@@ -17,6 +17,8 @@ package kubernetes
 import (
 	"path/filepath"
 
+	fileutil "github.com/labring/sealos/pkg/utils/file"
+
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -42,37 +44,81 @@ type kubernetesClient struct {
 	config *rest.Config
 }
 
-// NewKubernetesClient creates a KubernetesClient
-func NewKubernetesClient(kubeconfig, apiserver string) (Client, error) {
-	var config *rest.Config
-	var err error
-	if config == nil {
-		config, err = rest.InClusterConfig()
-		if err != nil {
-			if kubeconfig == "" {
-				kubeconfig = filepath.Join(homedir.HomeDir(), ".kube", "config")
-			}
-			config, err = clientcmd.BuildConfigFromFlags(apiserver, kubeconfig)
-			if err != nil {
-				return nil, err
-			}
+func newKubernetesClient(kubeconfig, apiserver string, insecure bool) (Client, error) {
+	if kubeconfig == "" || !fileutil.IsExist(kubeconfig) {
+		defaultKubeconfig := filepath.Join(homedir.HomeDir(), ".kube", "config")
+		if !fileutil.IsExist(defaultKubeconfig) {
+			kubeconfig = ""
+		} else {
+			kubeconfig = defaultKubeconfig
 		}
+	}
+	config, err := clientcmd.BuildConfigFromFlags(apiserver, kubeconfig)
+	if err != nil {
+		return nil, err
 	}
 	config.QPS = 1e6
 	config.Burst = 1e6
+	if insecure {
+		config.TLSClientConfig.CAFile = ""
+		config.TLSClientConfig.CAData = nil
+		config.TLSClientConfig.Insecure = true
+	}
+
 	var k kubernetesClient
-	k.k8s, err = kubernetes.NewForConfig(config)
+	k8s, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, err
 	}
-	k.discoveryClient, err = discovery.NewDiscoveryClientForConfig(config)
+	k.k8s = k8s
+
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config)
 	if err != nil {
 		return nil, err
 	}
-	k.k8sDynamic, err = dynamic.NewForConfig(config)
+	k.discoveryClient = discoveryClient
+
+	k8sDynamic, err := dynamic.NewForConfig(config)
 	if err != nil {
 		return nil, err
 	}
+	k.k8sDynamic = k8sDynamic
+
+	k.config = config
+	return &k, nil
+}
+
+func NewKubernetesClientSkipTLSVerify(kubeconfig, apiserver string) (Client, error) {
+	return newKubernetesClient(kubeconfig, apiserver, true)
+}
+
+// NewKubernetesClient creates a KubernetesClient
+func NewKubernetesClient(kubeconfig, apiserver string) (Client, error) {
+	return newKubernetesClient(kubeconfig, apiserver, false)
+}
+
+func NewKubernetesClientByConfig(config *rest.Config) (Client, error) {
+	config.QPS = 1e6
+	config.Burst = 1e6
+	var k kubernetesClient
+	k8s, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	k.k8s = k8s
+
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	k.discoveryClient = discoveryClient
+
+	k8sDynamic, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	k.k8sDynamic = k8sDynamic
+
 	k.config = config
 	return &k, nil
 }

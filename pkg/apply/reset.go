@@ -15,44 +15,55 @@
 package apply
 
 import (
+	"errors"
+	"fmt"
+
+	"github.com/spf13/cobra"
+
 	"github.com/labring/sealos/pkg/apply/applydrivers"
 	"github.com/labring/sealos/pkg/clusterfile"
-	v2 "github.com/labring/sealos/pkg/types/v1beta1"
-	"github.com/labring/sealos/pkg/utils/constants"
-	fileutil "github.com/labring/sealos/pkg/utils/file"
+	"github.com/labring/sealos/pkg/constants"
+	"github.com/labring/sealos/pkg/ssh"
 	"github.com/labring/sealos/pkg/utils/logger"
-	"github.com/labring/sealos/pkg/utils/yaml"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func NewApplierFromResetArgs(args *ResetArgs) (applydrivers.Interface, error) {
-	var cluster *v2.Cluster
-	clusterPath := constants.Clusterfile(args.ClusterName)
-	if fileutil.IsExist(clusterPath) {
-		clusterFile := clusterfile.NewClusterFile(clusterPath)
-		err := clusterFile.Process()
-		if err != nil {
-			return nil, err
-		}
-		cluster = clusterFile.GetCluster()
-		if args.Nodes == "" && args.Masters == "" {
-			return applydrivers.NewDefaultApplier(cluster, nil)
-		}
+func NewApplierFromResetArgs(cmd *cobra.Command, args *ResetArgs) (applydrivers.Interface, error) {
+	clusterPath := constants.Clusterfile(args.ClusterName.ClusterName)
+	cf := clusterfile.NewClusterFile(clusterPath)
+	err := cf.Process()
+	// incase we want to reset force
+	if err != nil && err != clusterfile.ErrClusterFileNotExists {
+		return nil, err
 	}
-	cluster = &v2.Cluster{}
-	cluster.CreationTimestamp = metav1.Now()
-	cluster.Name = args.ClusterName
-	cluster.Kind = "Cluster"
+	cluster := cf.GetCluster()
+	if cluster == nil {
+		return nil, errors.New("clusterfile must exist")
+	}
 	c := &ClusterArgs{
-		clusterName: args.ClusterName,
+		clusterName: cluster.Name,
 		cluster:     cluster,
 	}
-	if err := c.SetClusterResetArgs(args.ToRunArgs()); err != nil {
+	if err = c.resetArgs(cmd, args); err != nil {
 		return nil, err
 	}
-	logger.Debug("write reset cluster file to local storage: %s", clusterPath)
-	if err := yaml.MarshalYamlToFile(clusterPath, cluster); err != nil {
-		return nil, err
+	return applydrivers.NewDefaultApplier(cmd.Context(), c.cluster, cf, nil)
+}
+
+func (r *ClusterArgs) resetArgs(cmd *cobra.Command, args *ResetArgs) error {
+	if args.ClusterName.ClusterName == "" {
+		return fmt.Errorf("cluster name can not be empty")
 	}
-	return applydrivers.NewDefaultApplier(c.cluster, nil)
+	override := getSSHFromCommand(cmd)
+	if override != nil {
+		ssh.OverSSHConfig(&r.cluster.Spec.SSH, override)
+	}
+
+	if r.cluster.ObjectMeta.CreationTimestamp.IsZero() {
+		return errors.New("creation time must be specified in clusterfile")
+	}
+	if len(r.cluster.Spec.Hosts) == 0 {
+		return errors.New("host must not be empty in clusterfile")
+	}
+	logger.Debug("cluster info: %v", r.cluster)
+	return nil
 }

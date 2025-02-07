@@ -15,32 +15,35 @@
 package cmd
 
 import (
+	"github.com/spf13/cobra"
+
 	"github.com/labring/sealos/pkg/apply"
 	"github.com/labring/sealos/pkg/utils/logger"
-	"github.com/spf13/cobra"
 )
 
 var clusterFile string
 
-// applyCmd represents the apply command
-var applyCmd = &cobra.Command{
-	Use:     "apply",
-	Short:   "apply a kubernetes cluster",
-	Example: `sealos apply -f Clusterfile`,
-	Args:    cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		applier, err := apply.NewApplierFromFile(clusterFile)
-		if err != nil {
-			return err
-		}
-		return applier.Apply()
-	},
-	PostRun: func(cmd *cobra.Command, args []string) {
-		logger.Info(contact)
-	},
-}
-
-func init() {
-	rootCmd.AddCommand(applyCmd)
+func newApplyCmd() *cobra.Command {
+	applyArgs := &apply.Args{}
+	// applyCmd represents the apply command
+	var applyCmd = &cobra.Command{
+		Use:     "apply",
+		Short:   "Run cloud images within a kubernetes cluster with Clusterfile",
+		Example: `sealos apply -f Clusterfile`,
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			applier, err := apply.NewApplierFromFile(cmd, clusterFile, applyArgs)
+			if err != nil {
+				return err
+			}
+			return applier.Apply()
+		},
+		PostRun: func(cmd *cobra.Command, args []string) {
+			logger.Info(getContact())
+		},
+	}
+	setRequireBuildahAnnotation(applyCmd)
 	applyCmd.Flags().StringVarP(&clusterFile, "Clusterfile", "f", "Clusterfile", "apply a kubernetes cluster")
+	applyArgs.RegisterFlags(applyCmd.Flags())
+	return applyCmd
 }

@@ -17,18 +17,17 @@ package cmd
 import (
 	"errors"
 
-	"github.com/labring/sealos/pkg/apply/processor"
-
-	"github.com/labring/sealos/pkg/utils/logger"
+	"github.com/spf13/cobra"
 
 	"github.com/labring/sealos/pkg/apply"
-	"github.com/spf13/cobra"
+	"github.com/labring/sealos/pkg/apply/processor"
+	"github.com/labring/sealos/pkg/utils/logger"
 )
 
-var exampledelete = `
+var exampleDelete = `
 delete nodes:
 	sealos delete --nodes x.x.x.x
-		if accidentally deleted; 
+		if accidentally deleted;
 		Use 'sealos add' to recover:
 			sealos add --nodes x.x.x.x
 
@@ -44,16 +43,19 @@ Please note that sealos will delete your master if the --masters parameter is sp
 
 // deleteCmd represents the delete command
 func newDeleteCmd() *cobra.Command {
+	deleteArgs := &apply.ScaleArgs{
+		Cluster: &apply.Cluster{},
+	}
 	var deleteCmd = &cobra.Command{
 		Use:     "delete",
-		Short:   "delete some node",
+		Short:   "Remove nodes from cluster",
 		Args:    cobra.NoArgs,
-		Example: exampledelete,
+		Example: exampleDelete,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := processor.ConfirmDeleteNodes(); err != nil {
 				return err
 			}
-			applier, err := apply.NewScaleApplierFromArgs(deleteArgs, "delete")
+			applier, err := apply.NewScaleApplierFromArgs(cmd, deleteArgs)
 			if err != nil {
 				return err
 			}
@@ -66,19 +68,11 @@ func newDeleteCmd() *cobra.Command {
 			return nil
 		},
 		PostRun: func(cmd *cobra.Command, args []string) {
-			logger.Info(contact)
+			logger.Info(getContact())
 		},
 	}
-	deleteArgs = &apply.ScaleArgs{}
-	deleteCmd.Flags().StringVarP(&deleteArgs.Masters, "masters", "m", "", "reduce Count or IPList to masters")
-	deleteCmd.Flags().StringVarP(&deleteArgs.Nodes, "nodes", "n", "", "reduce Count or IPList to nodes")
-	deleteCmd.Flags().StringVarP(&deleteArgs.ClusterName, "cluster", "c", "default", "delete a kubernetes cluster with cluster name")
-	deleteCmd.Flags().BoolVar(&processor.ForceDelete, "force", false, "We also can input an --force flag to delete cluster by force")
+	setRequireBuildahAnnotation(deleteCmd)
+	deleteArgs.RegisterFlags(deleteCmd.Flags(), "removed", "remove")
+	deleteCmd.Flags().BoolVar(&processor.ForceDelete, "force", false, "we also can input an --force flag to delete cluster by force")
 	return deleteCmd
-}
-
-var deleteArgs *apply.ScaleArgs
-
-func init() {
-	rootCmd.AddCommand(newDeleteCmd())
 }

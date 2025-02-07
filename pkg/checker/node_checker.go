@@ -16,19 +16,17 @@ package checker
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"os"
-	"text/template"
 
-	"github.com/labring/sealos/pkg/utils/constants"
-
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/labring/sealos/pkg/client-go/kubernetes"
+	"github.com/labring/sealos/pkg/constants"
+	"github.com/labring/sealos/pkg/template"
 	v2 "github.com/labring/sealos/pkg/types/v1beta1"
 	"github.com/labring/sealos/pkg/utils/logger"
-
-	corev1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -51,8 +49,8 @@ func (n *NodeChecker) Check(cluster *v2.Cluster, phase string) error {
 		return nil
 	}
 	// checker if all the node is ready
-	data := constants.NewData(cluster.Name)
-	c, err := kubernetes.NewKubernetesClient(data.AdminFile(), cluster.GetMaster0IPAPIServer())
+	data := constants.NewPathResolver(cluster.Name)
+	c, err := kubernetes.NewKubernetesClient(data.AdminFile(), "")
 	if err != nil {
 		return err
 	}
@@ -80,21 +78,12 @@ func (n *NodeChecker) Check(cluster *v2.Cluster, phase string) error {
 		NodeCount:        nodeCount,
 		NotReadyNodeList: notReadyNodeList,
 	}
-	err = n.Output(nodeClusterStatus)
-	if err != nil {
-		return err
-	}
-	if notReadyCount != 0 {
-		return fmt.Errorf("check node %v not ready", notReadyNodeList)
-	}
-	return nil
+	return n.Output(nodeClusterStatus)
 }
 
 func (n *NodeChecker) Output(nodeCLusterStatus NodeClusterStatus) error {
-	//t1, err := template.ParseFiles("templates/node_checker.tpl")
-	t := template.New("node_checker")
-	t, err := t.Parse(
-		`Cluster Node Status
+	tpl, isOk, err := template.TryParse(`
+Cluster Node Status
   ReadyNode: {{ .ReadyCount }}/{{ .NodeCount }}
   {{ if (gt .NotReadyCount 0 ) -}}
   Not Ready Node List:
@@ -103,16 +92,14 @@ func (n *NodeChecker) Output(nodeCLusterStatus NodeClusterStatus) error {
     {{- end }}
   {{ end }}
 `)
-	if err != nil {
-		panic(err)
+	if err != nil || !isOk {
+		if err != nil {
+			logger.Error("failed to render node checkers template. error: %s", err.Error())
+			return err
+		}
+		return errors.New("convert node template failed")
 	}
-	t = template.Must(t, err)
-	err = t.Execute(os.Stdout, nodeCLusterStatus)
-	if err != nil {
-		logger.Error("node checkers template can not excute %s", err)
-		return err
-	}
-	return nil
+	return tpl.Execute(os.Stdout, nodeCLusterStatus)
 }
 
 func getNodeStatus(node corev1.Node) (IP string, Phase string) {

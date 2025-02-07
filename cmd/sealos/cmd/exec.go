@@ -17,61 +17,81 @@ limitations under the License.
 package cmd
 
 import (
-	"github.com/labring/sealos/pkg/clusterfile"
-	"github.com/labring/sealos/pkg/types/v1beta1"
-	"github.com/labring/sealos/pkg/utils/ssh"
+	"context"
+
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
+
+	"github.com/labring/sealos/pkg/clusterfile"
+	"github.com/labring/sealos/pkg/exec"
+	"github.com/labring/sealos/pkg/ssh"
+	v2 "github.com/labring/sealos/pkg/types/v1beta1"
 )
 
-var roles string
 var clusterName string
-var ips []string
 
-func newExecCmd() *cobra.Command {
-	var cluster *v1beta1.Cluster
-	var cmd = &cobra.Command{
-		Use:   "exec",
-		Short: "exec a shell command or script on all node.",
-		Example: `
+var exampleExec = `
 exec to default cluster: default
 	sealos exec "cat /etc/hosts"
 specify the cluster name(If there is only one cluster in the $HOME/.sealos directory, it should be applied. ):
     sealos exec -c my-cluster "cat /etc/hosts"
 set role label to exec cmd:
-    sealos exec -c my-cluster -r master,slave,node1 "cat /etc/hosts"	
+    sealos exec -c my-cluster -r master,node "cat /etc/hosts"
 set ips to exec cmd:
-    sealos exec -c my-cluster --ips 172.16.1.38 "cat /etc/hosts"	
-`,
-		Args: cobra.ExactArgs(1),
+    sealos exec -c my-cluster --ips 172.16.1.38 "cat /etc/hosts"
+`
+
+func newExecCmd() *cobra.Command {
+	var (
+		roles   []string
+		ips     []string
+		cluster *v2.Cluster
+	)
+	var execCmd = &cobra.Command{
+		Use:     "exec",
+		Short:   "Execute shell command or script on specified nodes",
+		Example: exampleExec,
+		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(ips) > 0 {
-				execCmd, err := ssh.NewExecCmdFromIPs(cluster, ips)
-				if err != nil {
-					return err
-				}
-				return execCmd.RunCmd(args[0])
-			}
-			execCmd, err := ssh.NewExecCmdFromRoles(cluster, roles)
-			if err != nil {
-				return err
-			}
-			return execCmd.RunCmd(args[0])
+			targets := getTargets(cluster, ips, roles)
+			return runCommand(cluster, targets, args)
 		},
-		PreRunE: func(cmd *cobra.Command, args []string) error {
-			cls, err := clusterfile.GetClusterFromName(clusterName)
-			if err != nil {
-				return err
-			}
-			cluster = cls
-			return nil
+		PreRunE: func(cmd *cobra.Command, args []string) (err error) {
+			cluster, err = clusterfile.GetClusterFromName(clusterName)
+			return
 		},
 	}
-	cmd.Flags().StringVarP(&clusterName, "cluster-name", "c", "default", "submit one cluster name")
-	cmd.Flags().StringVarP(&roles, "roles", "r", "", "set role label to roles")
-	cmd.Flags().StringSliceVar(&ips, "ips", []string{}, "ssh ips list on node")
-	return cmd
+	execCmd.Flags().StringVarP(&clusterName, "cluster", "c", "default", "name of cluster to run commands")
+	execCmd.Flags().StringSliceVarP(&roles, "roles", "r", []string{}, "run command on nodes with role")
+	execCmd.Flags().StringSliceVar(&ips, "ips", []string{}, "run command on nodes with ip address")
+	return execCmd
 }
 
-func init() {
-	rootCmd.AddCommand(newExecCmd())
+func getTargets(cluster *v2.Cluster, ips []string, roles []string) []string {
+	if len(ips) > 0 {
+		return ips
+	}
+	if len(roles) == 0 {
+		return cluster.GetAllIPS()
+	}
+	var targets []string
+	for i := range roles {
+		targets = append(targets, cluster.GetIPSByRole(roles[i])...)
+	}
+	return targets
+}
+
+func runCommand(cluster *v2.Cluster, targets []string, args []string) error {
+	execer, err := exec.New(ssh.NewCacheClientFromCluster(cluster, true))
+	if err != nil {
+		return err
+	}
+	eg, _ := errgroup.WithContext(context.Background())
+	for _, ipAddr := range targets {
+		ip := ipAddr
+		eg.Go(func() error {
+			return execer.CmdAsync(ip, args...)
+		})
+	}
+	return eg.Wait()
 }

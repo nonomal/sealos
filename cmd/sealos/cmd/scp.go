@@ -17,63 +17,70 @@ limitations under the License.
 package cmd
 
 import (
-	"github.com/labring/sealos/pkg/clusterfile"
-	"github.com/labring/sealos/pkg/types/v1beta1"
-	"github.com/labring/sealos/pkg/utils/ssh"
+	"context"
+
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
+
+	"github.com/labring/sealos/pkg/clusterfile"
+	"github.com/labring/sealos/pkg/exec"
+	"github.com/labring/sealos/pkg/ssh"
+	"github.com/labring/sealos/pkg/types/v1beta1"
+	"github.com/labring/sealos/pkg/utils/logger"
 )
 
-// Shared with exec.go
-// var roles string
-// var clusterName string
-// var ips []string
-
-func newScpCmd() *cobra.Command {
-	var cluster *v1beta1.Cluster
-	var cmd = &cobra.Command{
-		Use: "scp",
-		// Aliases: []string{"cp"},
-		Short: "copy local file to remote on all node.",
-		Example: `
+const exampleScp = `
 copy file to default cluster: default
 	sealos scp "/root/aa.txt" "/root/dd.txt"
 specify the cluster name(If there is only one cluster in the $HOME/.sealos directory, it should be applied. ):
     sealos scp -c my-cluster "/root/aa.txt" "/root/dd.txt"
 set role label to copy file:
-    sealos scp -c my-cluster -r master,slave,node1 "cat /etc/hosts"	
+    sealos scp -c my-cluster -r master,node "cat /etc/hosts"
 set ips to copy file:
     sealos scp -c my-cluster --ips 172.16.1.38  "/root/aa.txt" "/root/dd.txt"
-`,
-		Args: cobra.ExactArgs(2),
+`
+
+func newScpCmd() *cobra.Command {
+	var (
+		roles   []string
+		ips     []string
+		cluster *v1beta1.Cluster
+	)
+	var scpCmd = &cobra.Command{
+		Use:     "scp",
+		Short:   "Copy file to remote on specified nodes",
+		Example: exampleScp,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(ips) > 0 {
-				sshCmd, err := ssh.NewExecCmdFromIPs(cluster, ips)
-				if err != nil {
-					return err
-				}
-				return sshCmd.RunCopy(args[0], args[1])
-			}
-			sshCmd, err := ssh.NewExecCmdFromRoles(cluster, roles)
-			if err != nil {
-				return err
-			}
-			return sshCmd.RunCopy(args[0], args[1])
+			targets := getTargets(cluster, ips, roles)
+			return runCopy(cluster, targets, args)
 		},
-		PreRunE: func(cmd *cobra.Command, args []string) error {
-			cls, err := clusterfile.GetClusterFromName(clusterName)
-			if err != nil {
-				return err
-			}
-			cluster = cls
-			return nil
+		PreRunE: func(cmd *cobra.Command, args []string) (err error) {
+			cluster, err = clusterfile.GetClusterFromName(clusterName)
+			return
 		},
 	}
-	cmd.Flags().StringVarP(&clusterName, "cluster-name", "c", "default", "submit one cluster name")
-	cmd.Flags().StringVarP(&roles, "roles", "r", "", "set role label to roles")
-	cmd.Flags().StringSliceVar(&ips, "ips", []string{}, "ssh ips list on node")
-	return cmd
+	scpCmd.Flags().StringVarP(&clusterName, "cluster", "c", "default", "name of cluster to run scp action")
+	scpCmd.Flags().StringSliceVarP(&roles, "roles", "r", []string{}, "copy file to nodes with role")
+	scpCmd.Flags().StringSliceVar(&ips, "ips", []string{}, "copy file to nodes with ip address")
+	return scpCmd
 }
 
-func init() {
-	rootCmd.AddCommand(newScpCmd())
+func runCopy(cluster *v1beta1.Cluster, targets []string, args []string) error {
+	execer, err := exec.New(ssh.NewCacheClientFromCluster(cluster, true))
+	if err != nil {
+		return err
+	}
+	eg, _ := errgroup.WithContext(context.Background())
+	for _, ipAddr := range targets {
+		ip := ipAddr
+		eg.Go(func() error {
+			return execer.Copy(ip, args[0], args[1])
+		})
+	}
+	if err = eg.Wait(); err != nil {
+		return err
+	}
+	logger.Info("transfers files success")
+	return nil
 }
