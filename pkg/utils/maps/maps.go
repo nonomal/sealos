@@ -19,27 +19,28 @@ package maps
 import (
 	"fmt"
 	"strings"
+
+	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
-func MapToString(data map[string]string) string {
-	result := make([]string, 0)
-	for k, v := range data {
-		result = append(result, fmt.Sprintf("%s=%s", k, v))
+func ToString(data map[string]string, sep string) string {
+	result := make([]string, len(data))
+	for i, k := range yaml.SortedMapKeys(data) {
+		result[i] = fmt.Sprintf("%s=%s", k, data[k])
 	}
-
-	return strings.Join(result, ",")
+	return strings.Join(result, sep)
 }
 
-func StringToMap(data string, spilt string) map[string]string {
-	list := strings.Split(data, spilt)
-	return ListToMap(list)
+func FromString(data string, sep string) map[string]string {
+	list := strings.Split(data, sep)
+	return FromSlice(list)
 }
 
-func ListToMap(data []string) map[string]string {
+func FromSlice(data []string) map[string]string {
 	m := make(map[string]string)
 	for _, l := range data {
 		if l != "" {
-			kv := strings.Split(l, "=")
+			kv := strings.SplitN(l, "=", 2)
 			if len(kv) == 2 {
 				m[kv[0]] = kv[1]
 			}
@@ -48,7 +49,7 @@ func ListToMap(data []string) map[string]string {
 	return m
 }
 
-func MergeMap(ms ...map[string]string) map[string]string {
+func Merge(ms ...map[string]string) map[string]string {
 	res := map[string]string{}
 	for _, m := range ms {
 		for k, v := range m {
@@ -77,4 +78,20 @@ func DeepMerge(dst, src *map[string]interface{}) {
 		DeepMerge(&dV, &sV)
 		(*dst)[srcK] = dV
 	}
+}
+
+func GetFromKeys(m map[string]string, keys ...string) string {
+	for _, k := range keys {
+		if v, ok := m[k]; ok && v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func SetKeys(m map[string]string, keys []string, value string) map[string]string {
+	for _, v := range keys {
+		m[v] = value
+	}
+	return m
 }

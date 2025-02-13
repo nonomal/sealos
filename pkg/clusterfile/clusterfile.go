@@ -16,6 +16,7 @@ package clusterfile
 
 import (
 	"errors"
+	"sync"
 
 	"github.com/labring/sealos/pkg/runtime"
 	v2 "github.com/labring/sealos/pkg/types/v1beta1"
@@ -24,37 +25,77 @@ import (
 var ErrTypeNotFound = errors.New("no corresponding type structure was found")
 
 type ClusterFile struct {
-	path       string
-	Cluster    *v2.Cluster
-	Configs    []v2.Config
-	KubeConfig *runtime.KubeadmConfig
-	//Plugins    []v1.Plugin
+	path                     string
+	customConfigFiles        []string
+	customRuntimeConfigFiles []string
+	customValues             []string
+	customSets               []string
+	customEnvs               []string
+
+	cluster       *v2.Cluster
+	configs       []v2.Config
+	runtimeConfig runtime.Config
+
+	once sync.Once
 }
 
 type Interface interface {
 	PreProcessor
 	GetCluster() *v2.Cluster
 	GetConfigs() []v2.Config
-	//GetPlugins() []v1.Plugin
-	GetKubeadmConfig() *runtime.KubeadmConfig
+	GetRuntimeConfig() runtime.Config
 }
 
 func (c *ClusterFile) GetCluster() *v2.Cluster {
-	return c.Cluster
+	return c.cluster
 }
 
 func (c *ClusterFile) GetConfigs() []v2.Config {
-	return c.Configs
+	return c.configs
 }
 
-//func (c *ClusterFile) GetPlugins() []v1.Plugin {
-//	return c.Plugins
-//}
-
-func (c *ClusterFile) GetKubeadmConfig() *runtime.KubeadmConfig {
-	return c.KubeConfig
+func (c *ClusterFile) GetRuntimeConfig() runtime.Config {
+	return c.runtimeConfig
 }
 
-func NewClusterFile(path string) Interface {
-	return &ClusterFile{path: path}
+type OptionFunc func(*ClusterFile)
+
+func WithCustomConfigFiles(files []string) OptionFunc {
+	return func(c *ClusterFile) {
+		c.customConfigFiles = files
+	}
+}
+
+func WithCustomRuntimeConfigFiles(files []string) OptionFunc {
+	return func(c *ClusterFile) {
+		c.customRuntimeConfigFiles = files
+	}
+}
+
+func WithCustomValues(valueFiles []string) OptionFunc {
+	return func(c *ClusterFile) {
+		c.customValues = valueFiles
+	}
+}
+
+func WithCustomSets(sets []string) OptionFunc {
+	return func(c *ClusterFile) {
+		c.customSets = sets
+	}
+}
+
+func WithCustomEnvs(envs []string) OptionFunc {
+	return func(c *ClusterFile) {
+		c.customEnvs = envs
+	}
+}
+
+func NewClusterFile(path string, opts ...OptionFunc) Interface {
+	cf := &ClusterFile{
+		path: path,
+	}
+	for _, opt := range opts {
+		opt(cf)
+	}
+	return cf
 }

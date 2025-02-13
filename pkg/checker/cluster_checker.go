@@ -14,20 +14,21 @@
 
 package checker
 
+// nosemgrep: go.lang.security.audit.xss.import-text-template.import-text-template
 import (
 	"context"
+	"errors"
 	"os"
-	"text/template"
 	"time"
 
-	"github.com/labring/sealos/pkg/utils/logger"
-
-	"github.com/labring/sealos/pkg/utils/constants"
-
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/labring/sealos/pkg/client-go/kubernetes"
+	"github.com/labring/sealos/pkg/constants"
+	"github.com/labring/sealos/pkg/template"
 	v2 "github.com/labring/sealos/pkg/types/v1beta1"
+	"github.com/labring/sealos/pkg/utils/logger"
 )
 
 type ClusterChecker struct {
@@ -48,45 +49,49 @@ func (n *ClusterChecker) Check(cluster *v2.Cluster, phase string) error {
 	}
 
 	// checker if all the node is ready
-	data := constants.NewData(cluster.Name)
-	c, err := kubernetes.NewKubernetesClient(data.AdminFile(), cluster.GetMaster0IPAPIServer())
+	data := constants.NewPathResolver(cluster.Name)
+	c, err := kubernetes.NewKubernetesClient(data.AdminFile(), "")
 	if err != nil {
 		return err
 	}
+	ke := kubernetes.NewKubeExpansion(c.Kubernetes())
 	nodes, err := c.Kubernetes().CoreV1().Nodes().List(context.Background(), v1.ListOptions{})
 	if err != nil {
 		return err
 	}
 	healthyClient := kubernetes.NewKubeHealthy(c.Kubernetes(), 30*time.Second)
 	var NodeList []ClusterStatus
+	ctx := context.Background()
 	for _, node := range nodes.Items {
 		ip, _ := getNodeStatus(node)
 		cStatus := ClusterStatus{
 			IP:   ip,
 			Node: node.Name,
 		}
-		apiPod, err := kubernetes.GetStaticPod(c.Kubernetes(), node.Name, kubernetes.KubeAPIServer)
-		if err != nil {
-			return err
-		}
-		cStatus.KubeAPIServer = healthyClient.ForHealthyPod(apiPod)
+		if isControlPlaneNode(node) {
+			apiPod, err := ke.FetchStaticPod(ctx, node.Name, kubernetes.KubeAPIServer)
+			if err != nil {
+				return err
+			}
+			cStatus.KubeAPIServer = healthyClient.ForHealthyPod(apiPod)
 
-		controllerPod, err := kubernetes.GetStaticPod(c.Kubernetes(), node.Name, kubernetes.KubeControllerManager)
-		if err != nil {
-			return err
-		}
-		cStatus.KubeControllerManager = healthyClient.ForHealthyPod(controllerPod)
+			controllerPod, err := ke.FetchStaticPod(ctx, node.Name, kubernetes.KubeControllerManager)
+			if err != nil {
+				return err
+			}
+			cStatus.KubeControllerManager = healthyClient.ForHealthyPod(controllerPod)
 
-		schedulerPod, err := kubernetes.GetStaticPod(c.Kubernetes(), node.Name, kubernetes.KubeScheduler)
-		if err != nil {
-			return err
+			schedulerPod, err := ke.FetchStaticPod(ctx, node.Name, kubernetes.KubeScheduler)
+			if err != nil {
+				return err
+			}
+			cStatus.KubeScheduler = healthyClient.ForHealthyPod(schedulerPod)
 		}
-		cStatus.KubeScheduler = healthyClient.ForHealthyPod(schedulerPod)
 
-		if err = healthyClient.ForHealthyKubelet(10*time.Second, ip); err != nil {
+		if err = healthyClient.ForHealthyKubelet(5*time.Second, ip); err != nil {
 			cStatus.KubeletErr = err.Error()
 		} else {
-			cStatus.KubeletErr = "<nil>"
+			cStatus.KubeletErr = Nil
 		}
 		NodeList = append(NodeList, cStatus)
 	}
@@ -94,11 +99,19 @@ func (n *ClusterChecker) Check(cluster *v2.Cluster, phase string) error {
 	return n.Output(NodeList)
 }
 
+func isControlPlaneNode(node corev1.Node) bool {
+	if _, ok := node.Labels["node-role.kubernetes.io/control-plane"]; ok {
+		return true
+	}
+	if _, ok := node.Labels["node-role.kubernetes.io/master"]; ok {
+		return true
+	}
+	return false
+}
+
 func (n *ClusterChecker) Output(clusterStatus []ClusterStatus) error {
-	//t1, err := template.ParseFiles("templates/node_checker.tpl")
-	t := template.New("cluster_checker")
-	t, err := t.Parse(
-		`Cluster Status
+	tpl, isOk, err := template.TryParse(`
+Cluster Status
   Node List:
     {{- range .ClusterStatusList }}
 	NodeName: {{ .Node }}
@@ -109,16 +122,14 @@ func (n *ClusterChecker) Output(clusterStatus []ClusterStatus) error {
 		KubeletErr: {{.KubeletErr}}
     {{- end }}
 `)
-	if err != nil {
-		panic(err)
+	if err != nil || !isOk {
+		if err != nil {
+			logger.Error("failed to render cluster checkers template. error: %s", err.Error())
+			return err
+		}
+		return errors.New("convert cluster template failed")
 	}
-	t = template.Must(t, err)
-	err = t.Execute(os.Stdout, map[string][]ClusterStatus{"ClusterStatusList": clusterStatus})
-	if err != nil {
-		logger.Error("node checkers template can not excute %s", err)
-		return err
-	}
-	return nil
+	return tpl.Execute(os.Stdout, map[string][]ClusterStatus{"ClusterStatusList": clusterStatus})
 }
 
 func NewClusterChecker() Interface {

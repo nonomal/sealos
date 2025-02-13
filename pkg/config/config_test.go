@@ -16,10 +16,13 @@ package config
 
 import (
 	"bytes"
-	"io/ioutil"
+	"os"
 	"testing"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/labring/sealos/pkg/types/v1beta1"
+	"github.com/labring/sealos/pkg/utils/file"
 )
 
 func TestDumper_Dump(t *testing.T) {
@@ -56,6 +59,63 @@ func TestDumper_Dump(t *testing.T) {
 	}
 }
 
+func Test_NewConfiguration_Dump(t *testing.T) {
+	type fields struct {
+		configs  []v1beta1.Config
+		name     string
+		rootPath string
+		origin   string
+		expect   string
+	}
+	filename := "test.yaml"
+	tests := []struct {
+		name    string
+		fields  fields
+		wantErr bool
+	}{
+		{
+			"test dump clusterfile configs",
+			fields{
+				configs: []v1beta1.Config{
+					{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "Config",
+							APIVersion: "apps.sealos.io/v1beta1",
+						},
+						Spec: v1beta1.ConfigSpec{
+							Strategy: v1beta1.Merge,
+							Path:     filename,
+							Match:    "dockerhub.tencentcloudcr.com/labring/calico:v3.24.1",
+							Data:     "config:\n  test: true",
+						},
+					},
+				},
+				name:     "dockerhub.tencentcloudcr.com/labring/calico:v3.24.1",
+				rootPath: "./",
+				origin:   "config:\n  test: false\n",
+				expect:   "config:\n  test: true\n",
+			},
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := file.AtomicWriteFile(filename, []byte(tt.fields.origin), 0644); err != nil {
+				t.Errorf("failed to write file %v", err)
+			}
+			c := NewConfiguration(tt.fields.name, tt.fields.rootPath, tt.fields.configs)
+			if err := c.Dump(); (err != nil) != tt.wantErr {
+				t.Errorf("Dump() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			b, _ := file.ReadAll(filename)
+			if string(b) != tt.fields.expect {
+				t.Errorf("unexpected merge result, %s != %s", string(b), tt.fields.expect)
+			}
+			_ = os.Remove(filename)
+		})
+	}
+}
+
 func Test_getMergeConfig(t *testing.T) {
 	type args struct {
 		path string
@@ -88,7 +148,7 @@ func Test_getMergeConfig(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			err = ioutil.WriteFile("test_"+tt.args.path, got, 0644)
+			err = os.WriteFile("test_"+tt.args.path, got, 0644)
 			if err != nil {
 				t.Error(err)
 			}
@@ -156,19 +216,15 @@ func Test_getOverrideConfig(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := getOverrideConfigData(tt.args.path, tt.args.data)
-			if err != nil {
-				t.Error(err)
-				return
-			}
+			got := tt.args.data
 
 			output := "test_" + tt.args.path
-			err = ioutil.WriteFile(output, got, 0644)
+			err := os.WriteFile(output, got, 0644)
 			if err != nil {
 				t.Error(err)
 			}
 
-			content, err := ioutil.ReadFile(output)
+			content, err := os.ReadFile(output)
 			if err != nil {
 				t.Error(err)
 			}

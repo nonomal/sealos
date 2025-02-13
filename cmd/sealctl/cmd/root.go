@@ -18,20 +18,23 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/labring/sealos/pkg/utils/logger"
+	sreglog "github.com/labring/sreg/pkg/utils/logger"
 
 	"github.com/spf13/cobra"
+	"k8s.io/kubectl/pkg/util/templates"
+
+	"github.com/labring/sealos/pkg/buildah"
+	"github.com/labring/sealos/pkg/utils/logger"
 )
 
 var (
-	debug    bool
-	showPath bool
+	debug bool
 )
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "sealctl",
-	Short: "tools for sealos.",
+	Short: "sealctl is a command-line tool for managing and configuring the SealOS system.",
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	//	Run: func(cmd *cobra.Command, args []string) { },
@@ -41,16 +44,51 @@ var rootCmd = &cobra.Command{
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
+		if rootCmd.SilenceErrors {
+			fmt.Fprintln(os.Stderr, err)
+		}
 		os.Exit(1)
 	}
 }
 
 func init() {
 	cobra.OnInitialize(func() {
-		logger.Cfg(debug, showPath)
+		logger.CfgConsoleLogger(debug, false)
+		sreglog.CfgConsoleLogger(debug, false)
 	})
 
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable debug logger")
-	rootCmd.PersistentFlags().BoolVar(&showPath, "show-path", false, "enable show code path")
+	buildah.RegisterRootCommand(rootCmd)
+	groups := templates.CommandGroups{
+		{
+			Message: "Network Management Commands:",
+			Commands: []*cobra.Command{
+				newHostsCmd(),
+				newIPVSCmd(),
+			},
+		},
+		{
+			Message: "Machine Management Commands:",
+			Commands: []*cobra.Command{
+				newHostsNameCmd(),
+				newInitSystemCmd(),
+			},
+		},
+		{
+			Message: "Cluster Management Commands:",
+			Commands: []*cobra.Command{
+				newCRICmd(),
+				newCertCmd(),
+				newStaticPodCmd(),
+				newTokenCmd(),
+			},
+		},
+		{
+			Message:  "Container and Image Commands:",
+			Commands: buildah.AllSubCommands(),
+		},
+	}
+	groups.Add(rootCmd)
+	filters := []string{}
+	templates.ActsAsRootCommand(rootCmd, filters, groups...)
 }

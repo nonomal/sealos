@@ -16,25 +16,28 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 
-	"github.com/labring/sealos/pkg/utils/constants"
+	sreglog "github.com/labring/sreg/pkg/utils/logger"
+	"github.com/spf13/cobra"
+	"k8s.io/kubectl/pkg/util/templates"
+
+	"github.com/labring/sealos/pkg/buildah"
+	"github.com/labring/sealos/pkg/constants"
+	"github.com/labring/sealos/pkg/system"
 	"github.com/labring/sealos/pkg/utils/file"
 	"github.com/labring/sealos/pkg/utils/logger"
-	"github.com/sirupsen/logrus"
-
-	"github.com/spf13/cobra"
 )
 
 var (
-	debug          bool
-	clusterRootDir string
+	debug bool
 )
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "sealos",
-	Short: "simplest way install kubernetes tools.",
+	Short: "sealos is a Kubernetes distribution, a unified OS to manage cloud native applications.",
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	//	Run: func(cmd *cobra.Command, args []string) { },
@@ -44,36 +47,102 @@ var rootCmd = &cobra.Command{
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
+		if rootCmd.SilenceErrors {
+			fmt.Println(err)
+		}
 		os.Exit(1)
 	}
 }
 
 func init() {
 	cobra.OnInitialize(onBootOnDie)
-
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable debug logger")
-	rootCmd.PersistentFlags().StringVar(&clusterRootDir, "cluster-root", constants.DefaultClusterRootfsDir, "cluster root directory")
+	buildah.RegisterRootCommand(rootCmd)
+
+	groups := templates.CommandGroups{
+		{
+			Message: "Cluster Management Commands:",
+			Commands: []*cobra.Command{
+				newApplyCmd(),
+				newCertCmd(),
+				newRunCmd(),
+				newResetCmd(),
+				newStatusCmd(),
+			},
+		},
+		{
+			Message: "Node Management Commands:",
+			Commands: []*cobra.Command{
+				newAddCmd(),
+				newDeleteCmd(),
+			},
+		},
+		{
+			Message: "Remote Operation Commands:",
+			Commands: []*cobra.Command{
+				newExecCmd(),
+				newScpCmd(),
+			},
+		},
+		{
+			Message: "Experimental Commands:",
+			Commands: []*cobra.Command{
+				newRegistryCmd(rootCmd.Name()),
+			},
+		},
+		{
+			Message:  "Container and Image Commands:",
+			Commands: buildah.AllSubCommands(),
+		},
+	}
+	groups.Add(rootCmd)
+	filters := []string{"options"}
+	templates.ActsAsRootCommand(rootCmd, filters, groups...)
+
+	rootCmd.AddCommand(system.NewEnvCmd(constants.AppName))
+	rootCmd.AddCommand(optionsCommand(os.Stdout))
+}
+
+func setRequireBuildahAnnotation(cmd *cobra.Command) {
+	buildah.SetRequireBuildahAnnotation(cmd)
 }
 
 func onBootOnDie() {
-	constants.DefaultClusterRootfsDir = clusterRootDir
+	val, err := system.Get(system.DataRootConfigKey)
+	errExit(err)
+	constants.DefaultClusterRootFsDir = val
+	val, err = system.Get(system.RuntimeRootConfigKey)
+	errExit(err)
+	constants.DefaultRuntimeRootDir = val
+
 	var rootDirs = []string{
 		constants.LogPath(),
-		constants.DataPath(),
-		constants.Workdir(),
+		constants.WorkDir(),
 	}
-	if err := file.MkDirs(rootDirs...); err != nil {
-		logger.Error(err)
-		panic(1)
-	}
-	logger.CfgAndFile(debug, constants.LogPath(), "sealos", false)
-	setupLogrus()
+	errExit(file.MkDirs(rootDirs...))
+
+	logger.CfgConsoleAndFileLogger(debug, constants.LogPath(), "sealos", false)
+	sreglog.CfgConsoleAndFileLogger(debug, constants.LogPath(), "sealos", false)
 }
 
-const logLevel = "warn"
+func errExit(err error) {
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
 
-func setupLogrus() {
-	logrusLvl, _ := logrus.ParseLevel(logLevel)
-	logrus.SetLevel(logrusLvl)
+func optionsCommand(out io.Writer) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "options",
+		Short: "Print the list of flags inherited by all commands",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Usage()
+		},
+	}
+	cmd.SetOut(out)
+	cmd.SetErr(out)
+
+	templates.UseOptionsTemplates(cmd)
+	return cmd
 }

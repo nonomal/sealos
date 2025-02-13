@@ -20,24 +20,23 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/labring/sealos/pkg/utils/logger"
-
+	"github.com/labring/sealos/pkg/bootstrap"
+	"github.com/labring/sealos/pkg/buildah"
 	"github.com/labring/sealos/pkg/clusterfile"
-	"github.com/labring/sealos/pkg/filesystem"
-	"github.com/labring/sealos/pkg/image"
-	"github.com/labring/sealos/pkg/image/types"
-	"github.com/labring/sealos/pkg/runtime"
+	"github.com/labring/sealos/pkg/constants"
+	"github.com/labring/sealos/pkg/filesystem/rootfs"
+	"github.com/labring/sealos/pkg/runtime/factory"
 	v2 "github.com/labring/sealos/pkg/types/v1beta1"
-	"github.com/labring/sealos/pkg/utils/constants"
 	fileutil "github.com/labring/sealos/pkg/utils/file"
+	"github.com/labring/sealos/pkg/utils/logger"
+	"github.com/labring/sealos/pkg/utils/strings"
 )
 
 var ForceDelete bool
 
 type DeleteProcessor struct {
-	ClusterManager types.ClusterService
-	ImageManager   types.Service
-	ClusterFile    clusterfile.Interface
+	Buildah     buildah.Interface
+	ClusterFile clusterfile.Interface
 }
 
 // Execute :according to the different of desired cluster to delete cluster.
@@ -46,7 +45,7 @@ func (d DeleteProcessor) Execute(cluster *v2.Cluster) (err error) {
 	if err != nil {
 		return err
 	}
-	//TODO if error is exec net process ???
+	// TODO if error is exec net process ???
 	for _, f := range pipLine {
 		if err = f(cluster); err != nil {
 			logger.Warn("failed to exec delete process, %s", err.Error())
@@ -60,6 +59,7 @@ func (d DeleteProcessor) GetPipeLine() ([]func(cluster *v2.Cluster) error, error
 	todoList = append(todoList,
 		d.PreProcess,
 		d.Reset,
+		d.UndoBootstrap,
 		d.UnMountRootfs,
 		d.UnMountImage,
 		d.CleanFS,
@@ -68,60 +68,75 @@ func (d DeleteProcessor) GetPipeLine() ([]func(cluster *v2.Cluster) error, error
 }
 
 func (d *DeleteProcessor) PreProcess(cluster *v2.Cluster) error {
-	return SyncClusterStatus(cluster, d.ClusterManager, d.ImageManager, true)
+	return NewPreProcessError(SyncClusterStatus(cluster, d.Buildah, true))
+}
+
+func (d *DeleteProcessor) UndoBootstrap(cluster *v2.Cluster) error {
+	logger.Info("Executing pipeline Bootstrap in DeleteProcessor")
+	hosts := append(cluster.GetMasterIPAndPortList(), cluster.GetNodeIPAndPortList()...)
+	var cls *v2.Cluster
+	if v := d.ClusterFile.GetCluster(); v != nil {
+		cls = v
+	} else {
+		cls = cluster
+	}
+	bs := bootstrap.New(cls)
+	return bs.Delete(hosts...)
 }
 
 func (d *DeleteProcessor) Reset(cluster *v2.Cluster) error {
-	runTime, err := runtime.NewDefaultRuntime(cluster, d.ClusterFile.GetKubeadmConfig())
+	rt, err := factory.New(cluster, d.ClusterFile.GetRuntimeConfig())
 	if err != nil {
 		return fmt.Errorf("failed to delete runtime, %v", err)
 	}
-	return runTime.Reset()
+	return rt.Reset()
 }
 
-func (d DeleteProcessor) UnMountRootfs(cluster *v2.Cluster) error {
+func (d *DeleteProcessor) UnMountRootfs(cluster *v2.Cluster) error {
 	hosts := append(cluster.GetMasterIPAndPortList(), cluster.GetNodeIPAndPortList()...)
-	if cluster.Status.Mounts == nil {
-		logger.Warn("delete process unmount rootfs skip is cluster not mount any rootfs")
-		return nil
+	if strings.NotInIPList(hosts, cluster.GetRegistryIPAndPort()) {
+		hosts = append(hosts, cluster.GetRegistryIPAndPort())
 	}
-	fs, err := filesystem.NewRootfsMounter(cluster.Status.Mounts)
+	// umount don't care imageMounts
+	fs, err := rootfs.NewRootfsMounter(nil)
 	if err != nil {
 		return err
 	}
-	return fs.UnMountRootfs(cluster, hosts)
+	var cls *v2.Cluster
+	if v := d.ClusterFile.GetCluster(); v != nil {
+		cls = v
+	} else {
+		cls = cluster
+	}
+
+	return fs.UnMountRootfs(cls, hosts)
 }
 
-func (d DeleteProcessor) UnMountImage(cluster *v2.Cluster) error {
+func (d *DeleteProcessor) UnMountImage(cluster *v2.Cluster) error {
 	eg, _ := errgroup.WithContext(context.Background())
 	for _, mount := range cluster.Status.Mounts {
 		mount := mount
 		eg.Go(func() error {
-			return d.ClusterManager.Delete(mount.Name)
+			return d.Buildah.Delete(mount.Name)
 		})
 	}
 	return eg.Wait()
 }
 
-func (d DeleteProcessor) CleanFS(cluster *v2.Cluster) error {
+func (d *DeleteProcessor) CleanFS(cluster *v2.Cluster) error {
 	workDir := constants.ClusterDir(cluster.Name)
-	dataDir := constants.NewData(cluster.Name).Homedir()
+	dataDir := constants.NewPathResolver(cluster.Name).Root()
 	return fileutil.CleanFiles(workDir, dataDir)
 }
 
-func NewDeleteProcessor(clusterFile clusterfile.Interface) (Interface, error) {
-	imgSvc, err := image.NewImageService()
-	if err != nil {
-		return nil, err
-	}
-	clusterSvc, err := image.NewClusterService()
+func NewDeleteProcessor(name string, clusterFile clusterfile.Interface) (Interface, error) {
+	bder, err := buildah.New(name)
 	if err != nil {
 		return nil, err
 	}
 
 	return DeleteProcessor{
-		ClusterFile:    clusterFile,
-		ImageManager:   imgSvc,
-		ClusterManager: clusterSvc,
+		Buildah:     bder,
+		ClusterFile: clusterFile,
 	}, nil
 }

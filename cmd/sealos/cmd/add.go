@@ -17,29 +17,38 @@ package cmd
 import (
 	"errors"
 
-	"github.com/labring/sealos/pkg/utils/logger"
+	"github.com/spf13/cobra"
 
 	"github.com/labring/sealos/pkg/apply"
-	"github.com/spf13/cobra"
+	"github.com/labring/sealos/pkg/utils/logger"
 )
 
-// addCmd represents the delete command
-func newAddCmd() *cobra.Command {
-	var deleteCmd = &cobra.Command{
-		Use:   "add",
-		Short: "add some node",
-		Args:  cobra.NoArgs,
-		Example: `
+const exampleAdd = `
 add to nodes :
 	sealos add --nodes x.x.x.x
 
-add to default cluster: 
+add to default cluster:
 	sealos add --masters x.x.x.x --nodes x.x.x.x
 	sealos add --masters x.x.x.x-x.x.x.y --nodes x.x.x.x-x.x.x.y
-`,
+
+add with different ssh setting:
+	sealos add --masters x.x.x.x --nodes x.x.x.x --passwd your_diff_passwd
+Please note that the masters and nodes added in one command should have the save password.
+`
+
+// addCmd represents the add command
+func newAddCmd() *cobra.Command {
+	addArgs := &apply.ScaleArgs{
+		Cluster: &apply.Cluster{},
+		SSH:     &apply.SSH{},
+	}
+	var addCmd = &cobra.Command{
+		Use:     "add",
+		Short:   "Add nodes into cluster",
+		Args:    cobra.NoArgs,
+		Example: exampleAdd,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			//return errors.New("add feature no support")
-			applier, err := apply.NewScaleApplierFromArgs(addArgs, "add")
+			applier, err := apply.NewScaleApplierFromArgs(cmd, addArgs)
 			if err != nil {
 				return err
 			}
@@ -47,23 +56,15 @@ add to default cluster:
 		},
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			if addArgs.Nodes == "" && addArgs.Masters == "" {
-				return errors.New("node and master not empty in same time")
+				return errors.New("nodes and masters can't both be empty")
 			}
 			return nil
 		},
-		PostRun: func(cmd *cobra.Command, args []string) {
-			logger.Info(contact)
+		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+			logger.Info(getContact())
 		},
 	}
-	addArgs = &apply.ScaleArgs{}
-	deleteCmd.Flags().StringVarP(&addArgs.Masters, "masters", "m", "", "reduce Count or IPList to masters")
-	deleteCmd.Flags().StringVarP(&addArgs.Nodes, "nodes", "n", "", "reduce Count or IPList to nodes")
-	deleteCmd.Flags().StringVarP(&addArgs.ClusterName, "cluster", "c", "default", "delete a kubernetes cluster with cluster name")
-	return deleteCmd
-}
-
-var addArgs *apply.ScaleArgs
-
-func init() {
-	rootCmd.AddCommand(newAddCmd())
+	setRequireBuildahAnnotation(addCmd)
+	addArgs.RegisterFlags(addCmd.Flags(), "be joined", "join")
+	return addCmd
 }

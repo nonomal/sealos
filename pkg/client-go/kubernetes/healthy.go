@@ -18,21 +18,20 @@ package kubernetes
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
-	"path"
+	"net/url"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
-
-	"github.com/labring/sealos/pkg/utils/logger"
-
-	"github.com/pkg/errors"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	netutil "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
+
+	"github.com/labring/sealos/pkg/utils/logger"
 )
 
 // Healthy is an interface for waiting for criteria in Kubernetes to happen
@@ -64,7 +63,9 @@ func NewKubeHealthy(client clientset.Interface, timeout time.Duration) Healthy {
 // ForAPI waits for the API Server's /healthz endpoint to report "ok"
 func (w *kubeHealthy) ForAPI() error {
 	start := time.Now()
-	return wait.PollImmediate(APICallRetryInterval, w.timeout, func() (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
+	defer cancel()
+	return wait.PollUntilContextCancel(ctx, APICallRetryInterval, true, func(ctx context.Context) (done bool, err error) {
 		healthStatus := 0
 		w.client.Discovery().RESTClient().Get().AbsPath("/healthz").Do(context.TODO()).StatusCode(&healthStatus)
 		if healthStatus != http.StatusOK {
@@ -82,10 +83,9 @@ func (w *kubeHealthy) ForHealthyKubelet(initialTimeout time.Duration, host strin
 	logger.Debug("[kubelet-check] Initial timeout of %v passed.\n", initialTimeout)
 	return tryRunCommand(func() error {
 		trans := netutil.SetOldTransportDefaults(&http.Transport{})
-		trans.TLSClientConfig.InsecureSkipVerify = true
 		client := &http.Client{Transport: trans}
 
-		healthzEndpoint := path.Join(fmt.Sprintf("https://%s:%d", host, KubeletHealthzPort), "healthz")
+		healthzEndpoint, _ := url.JoinPath(fmt.Sprintf("http://%s:%d", host, KubeletHealthzPort), "healthz")
 		resp, err := client.Get(healthzEndpoint)
 		if err != nil {
 			logger.Warn("[kubelet-check] It seems like the kubelet isn't running or healthy.")
@@ -98,6 +98,18 @@ func (w *kubeHealthy) ForHealthyKubelet(initialTimeout time.Duration, host strin
 			logger.Warn("[kubelet-check] The HTTP call equal to 'curl -sSL %s' returned HTTP code %d\n", healthzEndpoint, resp.StatusCode)
 			return errors.New("the kubelet healthz endpoint is unhealthy")
 		}
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			logger.Warn("[kubelet-check] It seems like the kubelet isn't running or healthy.")
+			logger.Warn("[kubelet-check] The HTTP call equal to 'curl -sSL %s' failed with error: %v.\n", healthzEndpoint, err)
+			return err
+		}
+		if string(b) != "ok" {
+			logger.Warn("[kubelet-check] It seems like the kubelet isn't running or healthy.")
+			logger.Warn("[kubelet-check] The HTTP call equal to 'curl -sSL %s' returned HTTP code %d\n", healthzEndpoint, resp.StatusCode)
+			return errors.New("the kubelet healthz endpoint is unhealthy: resp is " + string(b))
+		}
+
 		return nil
 	}, 5) // a failureThreshold of five means waiting for a total of 155 seconds
 }

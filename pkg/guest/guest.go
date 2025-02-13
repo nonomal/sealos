@@ -15,103 +15,92 @@
 package guest
 
 import (
-	"fmt"
-	"path/filepath"
+	"context"
 	"strings"
 
-	"github.com/labring/sealos/pkg/utils/logger"
-
-	"github.com/labring/sealos/pkg/utils/exec"
-	fileutil "github.com/labring/sealos/pkg/utils/file"
-	"github.com/pkg/errors"
-	"k8s.io/client-go/util/homedir"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/labring/sealos/fork/golang/expansion"
-
 	"github.com/labring/sealos/pkg/env"
-	"github.com/labring/sealos/pkg/image"
-	"github.com/labring/sealos/pkg/image/types"
-	"github.com/labring/sealos/pkg/runtime"
+	"github.com/labring/sealos/pkg/exec"
+	"github.com/labring/sealos/pkg/ssh"
 	v2 "github.com/labring/sealos/pkg/types/v1beta1"
-	"github.com/labring/sealos/pkg/utils/constants"
 	"github.com/labring/sealos/pkg/utils/maps"
+	stringsutil "github.com/labring/sealos/pkg/utils/strings"
 )
 
 type Interface interface {
-	Apply(cluster *v2.Cluster, mounts []v2.MountImage) error
+	Apply(cluster *v2.Cluster, mounts []v2.MountImage, targetHosts []string) error
 	Delete(cluster *v2.Cluster) error
 }
 
-type Default struct {
-	imageService types.Service
-}
+type Default struct{}
 
 func NewGuestManager() (Interface, error) {
-	is, err := image.NewImageService()
-	if err != nil {
-		return nil, err
-	}
-	return &Default{imageService: is}, nil
+	return &Default{}, nil
 }
 
-func (d *Default) Apply(cluster *v2.Cluster, mounts []v2.MountImage) error {
-	clusterRootfs := runtime.GetConstantData(cluster.Name).RootFSPath()
-	envInterface := env.NewEnvProcessor(cluster, cluster.Status.Mounts)
-	envs := envInterface.WrapperEnv(cluster.GetMaster0IP()) //clusterfile
-	guestCMD := d.getGuestCmd(envs, cluster, mounts)
-
-	kubeConfig := filepath.Join(homedir.HomeDir(), ".kube", "config")
-	if !fileutil.IsExist(kubeConfig) {
-		adminFile := runtime.GetConstantData(cluster.Name).AdminFile()
-		data, err := fileutil.ReadAll(adminFile)
-		if err != nil {
-			return errors.Wrap(err, "read admin.conf error in guest")
-		}
-		master0IP := cluster.GetMaster0IP()
-		outData := strings.ReplaceAll(string(data), runtime.DefaultAPIServerDomain, master0IP)
-		if err = fileutil.WriteFile(kubeConfig, []byte(outData)); err != nil {
-			return err
-		}
-		defer func() {
-			_ = fileutil.CleanFiles(kubeConfig)
-		}()
+func (d *Default) Apply(cluster *v2.Cluster, mounts []v2.MountImage, targetHosts []string) error {
+	envGetter := env.NewEnvProcessor(cluster)
+	sshClient := ssh.NewCacheClientFromCluster(cluster, true)
+	execer, err := exec.New(sshClient)
+	if err != nil {
+		return err
 	}
 
-	for _, value := range guestCMD {
-		if value == "" {
-			continue
-		}
-		logger.Info("guest cmd is %s", value)
-		if err := exec.Cmd("bash", "-c", fmt.Sprintf(constants.CdAndExecCmd, clusterRootfs, value)); err != nil {
-			return err
+	for i, m := range mounts {
+		switch {
+		case m.IsRootFs(), m.IsPatch():
+			eg, ctx := errgroup.WithContext(context.Background())
+			for j := range targetHosts {
+				node := targetHosts[j]
+				envs := maps.Merge(m.Env, envGetter.Getenv(node))
+				cmds := formalizeImageCommands(cluster, i, m, envs)
+				eg.Go(func() error {
+					return execer.CmdAsyncWithContext(ctx, node,
+						stringsutil.RenderShellWithEnv(strings.Join(cmds, "; "), envs),
+					)
+				})
+			}
+			if err := eg.Wait(); err != nil {
+				return err
+			}
+		case m.IsApplication():
+			// on run on the first master
+			envs := maps.Merge(m.Env, envGetter.Getenv(cluster.GetMaster0IP()))
+			cmds := formalizeImageCommands(cluster, i, m, envs)
+			if err := execer.CmdAsync(cluster.GetMaster0IPAndPort(),
+				stringsutil.RenderShellWithEnv(strings.Join(cmds, "; "), envs),
+			); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
-func (d *Default) getGuestCmd(envs map[string]string, cluster *v2.Cluster, mounts []v2.MountImage) []string {
-	command := make([]string, 0)
-	for _, i := range mounts {
-		var baseEnvs map[string]string
-		if i.Env != nil {
-			envs = maps.MergeMap(baseEnvs, i.Env)
+func formalizeImageCommands(cluster *v2.Cluster, index int, m v2.MountImage, extraEnvs map[string]string) []string {
+	envs := maps.Merge(m.Env, extraEnvs)
+	envs = v2.MergeEnvWithBuiltinKeys(envs, m)
+	mapping := expansion.MappingFuncFor(envs)
+
+	cmds := make([]string, 0)
+	for i := range m.Entrypoint {
+		cmds = append(cmds, FormalizeWorkingCommand(cluster.Name, m.Name, m.Type, expansion.Expand(m.Entrypoint[i], mapping)))
+	}
+	if index == 0 && len(cluster.Spec.Command) > 0 {
+		for i := range cluster.Spec.Command {
+			cmds = append(cmds, FormalizeWorkingCommand(cluster.Name, m.Name, m.Type, expansion.Expand(cluster.Spec.Command[i], mapping)))
 		}
-		mapping := expansion.MappingFuncFor(envs)
-		if len(i.Cmd) != 0 {
-			for _, cmd := range i.Cmd {
-				command = append(command, expansion.Expand(cmd, mapping))
-			}
-		}
-		if len(cluster.Spec.Command) != 0 {
-			for _, cmd := range cluster.Spec.Command {
-				command = append(command, expansion.Expand(cmd, mapping))
-			}
+	} else {
+		for i := range m.Cmd {
+			cmds = append(cmds, FormalizeWorkingCommand(cluster.Name, m.Name, m.Type, expansion.Expand(m.Cmd[i], mapping)))
 		}
 	}
 
-	return command
+	return cmds
 }
 
-func (d Default) Delete(cluster *v2.Cluster) error {
-	panic("implement me")
+func (d Default) Delete(_ *v2.Cluster) error {
+	panic("not yet implemented")
 }

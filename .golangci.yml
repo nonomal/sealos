@@ -8,7 +8,10 @@ run:
   # default is true. Enables skipping of directories:
   #   vendor$, third_party$, testdata$, examples$, Godeps$, builtin$
   skip-dirs-use-default: true
-  modules-download-mode: vendor
+  skip-dirs:
+    - (^|/)fork($|/)
+    - pkg/registry/save/lib/
+  modules-download-mode: readonly
 
 linters:
   # please, do not use `enable-all`: it's deprecated and will be removed soon.
@@ -26,23 +29,18 @@ linters:
     - ineffassign
     - vet
     - typecheck
-    - deadcode
     - errcheck
     - govet
     - staticcheck
-    - structcheck
     - unused
-    - varcheck
     - nilerr
-    - ifshort
     - unconvert
 
 linters-settings:
   errcheck:
     check-type-assertions: false
-    ignore: fmt:.*,io/ioutil:^Read.*
+    ignore: fmt:.*
     exclude-functions:
-      - io/ioutil.ReadFile
       - io.Copy(*bytes.Buffer)
       - io.Copy(os.Stdout)
 
@@ -50,4 +48,4 @@ linters-settings:
 # https://github.com/golangci/golangci/wiki/Configuration
 service:
   # use the fixed version to not introduce new linters unexpectedly
-  golangci-lint-version: 1.39.0
+  golangci-lint-version: latest

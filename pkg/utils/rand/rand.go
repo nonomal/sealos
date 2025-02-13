@@ -18,16 +18,10 @@ package rand
 
 import (
 	"bytes"
-	crand "crypto/rand"
+	"crypto/rand"
+	"encoding/hex"
 	"math/big"
-	"math/rand"
-	"time"
 )
-
-func Rand(a int) int {
-	rand.Seed(time.Now().Unix())
-	return rand.Intn(a)
-}
 
 func Generator(len int) string {
 	var container string
@@ -36,8 +30,30 @@ func Generator(len int) string {
 	length := b.Len()
 	bigInt := big.NewInt(int64(length))
 	for i := 0; i < len; i++ {
-		randomInt, _ := crand.Int(crand.Reader, bigInt)
+		randomInt, _ := rand.Int(rand.Reader, bigInt)
 		container += string(str[randomInt.Int64()])
 	}
 	return container
+}
+
+// CreateRandBytes returns a cryptographically secure slice of random bytes with a given size
+func CreateRandBytes(size uint32) ([]byte, error) {
+	bytes := make([]byte, size)
+	if _, err := rand.Read(bytes); err != nil {
+		return nil, err
+	}
+	return bytes, nil
+}
+
+const (
+	CertificateKeySize = 32
+)
+
+// CreateCertificateKey returns a cryptographically secure random key
+func CreateCertificateKey() (string, error) {
+	randBytes, err := CreateRandBytes(CertificateKeySize)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(randBytes), nil
 }

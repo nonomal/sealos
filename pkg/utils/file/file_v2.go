@@ -16,29 +16,54 @@ package file
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/labring/sealos/pkg/utils/logger"
-
-	"github.com/pkg/errors"
 )
 
+// Filename returns the file name after the last "/".
 func Filename(f string) string {
 	i := strings.LastIndexByte(f, '/')
 	return f[i+1:]
 }
 
+// IsExist returns if a file exists.
 func IsExist(fileName string) bool {
 	if _, err := os.Stat(fileName); err != nil {
 		return os.IsExist(err)
 	}
 	return true
 }
+
+// IsFile returns true if given path is a file,
+// or returns false when it's a directory or does not exist.
+func IsFile(filePath string) bool {
+	f, e := os.Stat(filePath)
+	if e != nil {
+		return false
+	}
+	return !f.IsDir()
+}
+
+func IsTarFile(s string) bool {
+	return strings.HasSuffix(s, ".tar") || strings.HasSuffix(s, ".gz") || strings.HasSuffix(s, ".tgz")
+}
+
+// IsDir returns if the given path is a directory.
+func IsDir(path string) bool {
+	s, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return s.IsDir()
+}
+
+// GetFiles returns all the files under the path.
 func GetFiles(path string) (paths []string, err error) {
 	_, err = os.Stat(path)
 	if err != nil {
@@ -53,6 +78,8 @@ func GetFiles(path string) (paths []string, err error) {
 	})
 	return paths, err
 }
+
+// ReadLines reads the contents from the file line by line.
 func ReadLines(fileName string) ([]string, error) {
 	var lines []string
 	if !IsExist(fileName) {
@@ -74,6 +101,7 @@ func ReadLines(fileName string) ([]string, error) {
 	return lines, nil
 }
 
+// WriteLines outputs lines to the file.
 func WriteLines(fileName string, lines []string) error {
 	var sb strings.Builder
 	for _, line := range lines {
@@ -82,41 +110,12 @@ func WriteLines(fileName string, lines []string) error {
 	return WriteFile(fileName, []byte(sb.String()))
 }
 
-// ReadAll read file content
+// ReadAll reads all the content of the file.
 func ReadAll(fileName string) ([]byte, error) {
-	// step1：check file exist
-	if !IsExist(fileName) {
-		return nil, fmt.Errorf("path is %s no such file", fileName)
-	}
-	// step2：open file
-	file, err := os.Open(filepath.Clean(fileName))
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	// step3：read file content
-	content, err := ioutil.ReadFile(filepath.Clean(fileName))
-	if err != nil {
-		return nil, err
-	}
-
-	return content, nil
+	return os.ReadFile(fileName)
 }
 
-// file ./test/dir/xxx.txt if dir ./test/dir not exist, create it
-func MkFileFullPathDir(fileName string) error {
-	localDir := filepath.Dir(fileName)
-	if err := Mkdir(localDir); err != nil {
-		return fmt.Errorf("failed to create local dir %s: %v", localDir, err)
-	}
-	return nil
-}
-
-func Mkdir(dirName string) error {
-	return os.MkdirAll(dirName, 0755)
-}
-
+// MkDirs creates directories.
 func MkDirs(dirs ...string) error {
 	if len(dirs) == 0 {
 		return nil
@@ -130,18 +129,21 @@ func MkDirs(dirs ...string) error {
 	return nil
 }
 
+// MkTmpdir creates a temporary directory.
 func MkTmpdir(dir string) (string, error) {
-	tempDir, err := ioutil.TempDir(dir, "DTmp-")
+	tempDir, err := os.MkdirTemp(dir, "DTmp-")
 	if err != nil {
 		return "", err
 	}
 	return tempDir, os.MkdirAll(tempDir, 0755)
 }
 
+// MkTmpFile creates a temporary file.
 func MkTmpFile(path string) (*os.File, error) {
-	return ioutil.TempFile(path, "FTmp-")
+	return os.CreateTemp(path, "FTmp-")
 }
 
+// WriteFile outputs all content to the file.
 func WriteFile(fileName string, content []byte) error {
 	dir := filepath.Dir(fileName)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
@@ -153,10 +155,11 @@ func WriteFile(fileName string, content []byte) error {
 	return AtomicWriteFile(fileName, content, 0644)
 }
 
-// RecursionCopy is copy
-// copy a.txt /var/lib/a.txt
-// copy /root/test/abc /tmp/abc
+// RecursionCopy equals to `cp -r`
 func RecursionCopy(src, dst string) error {
+	if src == dst {
+		return nil
+	}
 	if IsDir(src) {
 		return CopyDirV3(src, dst)
 	}
@@ -169,6 +172,7 @@ func RecursionCopy(src, dst string) error {
 	return Copy(src, dst)
 }
 
+// CleanFile removes the file.
 func CleanFile(file *os.File) {
 	if file == nil {
 		return
@@ -184,24 +188,7 @@ func CleanFile(file *os.File) {
 	}
 }
 
-func CleanDir(dir string) {
-	if dir == "" {
-		logger.Error("clean dir path is empty")
-	}
-
-	if err := os.RemoveAll(dir); err != nil {
-		logger.Warn("failed to remove dir %s ", dir)
-	}
-}
-
-func CleanDirs(dirs ...string) {
-	if len(dirs) == 0 {
-		return
-	}
-	for _, dir := range dirs {
-		CleanDir(dir)
-	}
-}
+// CleanFiles removes multiple files.
 func CleanFiles(file ...string) error {
 	for _, f := range file {
 		err := os.RemoveAll(f)
@@ -212,14 +199,28 @@ func CleanFiles(file ...string) error {
 	return nil
 }
 
-func IsDir(path string) bool {
-	s, err := os.Stat(path)
-	if err != nil {
-		return false
+// CleanDir removes the directory.
+func CleanDir(dir string) {
+	if dir == "" {
+		logger.Error("clean dir path is empty")
 	}
-	return s.IsDir()
+
+	if err := os.RemoveAll(dir); err != nil {
+		logger.Warn("failed to remove dir %s ", dir)
+	}
 }
 
+// CleanDirs removes multiple directories.
+func CleanDirs(dirs ...string) {
+	if len(dirs) == 0 {
+		return
+	}
+	for _, dir := range dirs {
+		CleanDir(dir)
+	}
+}
+
+// CountDirFiles reutrns # of files under a directory.
 func CountDirFiles(dirName string) int {
 	if !IsDir(dirName) {
 		return 0
@@ -239,6 +240,7 @@ func CountDirFiles(dirName string) int {
 	return count
 }
 
+// GetFileSize returns the size of a file.
 func GetFileSize(path string) (size int64, err error) {
 	_, err = os.Stat(path)
 	if err != nil {
@@ -253,6 +255,7 @@ func GetFileSize(path string) (size int64, err error) {
 	return size, err
 }
 
+// GetFilesSize returns the size of multiple files.
 func GetFilesSize(paths []string) (int64, error) {
 	var size int64
 	for i := range paths {
